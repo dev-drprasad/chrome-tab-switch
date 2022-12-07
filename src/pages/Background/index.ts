@@ -30,7 +30,26 @@ type RegisterPayload = {
   tabId?: number;
 };
 
+type DeletePayload = {
+  tabId: number;
+};
+
 type TabIDByURL = { [x: string]: string };
+
+// chrome.windows.onCreated.addListener((event) => {
+//   chrome.windows.getAll((windows) => {
+//     chrome.tabs.query({ windowId: event.id }).then((tabs) => {
+//       chrome.storage.local.get('state', (result) => {
+//         const state: State = result.state;
+//         if (tabs.length === state.tabs.length) {
+
+//         }
+//       })
+//     });
+//   });
+// });
+
+chrome.storage.local.set({ state: { menu: {} } });
 
 const updateURLByTabId = (tabId: number, url: string) => {
   return new Promise((resolve) => {
@@ -66,6 +85,7 @@ chrome.tabs.query({ lastFocusedWindow: true }, (tabs) => {
   tabs.forEach((tab) => {
     console.log('tab :>> ', tab);
     if (!tab.id || !tab.url) return;
+
     tabIdByURL[tab.id] = tab.url;
   });
   chrome.storage.local.set({ tabIdByURL });
@@ -109,6 +129,11 @@ chrome.runtime.onMessage.addListener(function (request, sender, sendResponse) {
       state.menu[belongTo] = configs;
       chrome.storage.local.set({ state });
     });
+  }
+
+  if (request.type === 'DELETE') {
+    const eventTabId = request.payload as number;
+    removeTabId(eventTabId);
   }
 });
 

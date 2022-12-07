@@ -62,6 +62,9 @@ var options = {
         use: [
           {
             loader: 'style-loader',
+            options: {
+              insert: require.resolve('./src/styles.ts'),
+            },
           },
           {
             loader: 'css-loader',

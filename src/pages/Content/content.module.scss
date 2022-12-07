@@ -1,6 +1,4 @@
-
-
- .container {
+.container {
   position: fixed;
   top: 0;
   display: grid;
@@ -10,5 +8,40 @@
   height: 100%;
   backdrop-filter: blur(4px);
   background: rgba(5, 15, 20, 0.85);
+  overflow-y: auto;
  }
 
+ .leaftContainer {
+  position: relative;
+  height: 6rem;
+ }
+
+ .menuItemContainer {
+  position: relative;
+  width: 14rem;
+  height: 8rem;
+
+  &:hover > .leafs {
+   visibility: visible;
+  }
+  
+ }
+
+
+ .menu {
+  display: inline-flex;
+    flex-flow: column;
+ }
+
+ .menuBtn {
+  height: 100%;
+  width: 100%;
+ }
+
+ .leafs {
+  visibility: hidden;
+  position: absolute;
+    left: 100%;
+    top: 0;
+    width: 50vw;
+ }

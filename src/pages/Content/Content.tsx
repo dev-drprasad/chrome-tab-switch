@@ -2,7 +2,9 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { debounce, poll } from '../../shared';
 import { configs } from '../../shared/config';
 
+import './content.styles.css';
 import styles from './content.module.scss';
+import MenuLeaf from './MenuLeaf';
 
 type Config = {
   tabId: number;
@@ -49,14 +51,18 @@ const modifierKeys = new Set(['Alt', 'Meta', 'Control', 'Shift']);
 const checkIfModifierKeyPressed = (event: KeyboardEvent) =>
   modifierKeys.has(event.key);
 
+const shortcutKey = ['Alt'];
+
 const checkIfShouldShow = (keysPressed: Set<string>) => {
   return (
-    keysPressed.size === 2 && keysPressed.has('Alt') && keysPressed.has('Shift')
+    keysPressed.size === shortcutKey.length &&
+    shortcutKey.find(keysPressed.has.bind(keysPressed))
   );
 };
 
 const Content = () => {
   const [state, setState] = useState<State>();
+  const [visible, setVisible] = useState<boolean>();
   const errorsRef = useRef<Error[]>([]);
   const keysPressed = useRef(new Set<string>());
 
@@ -72,12 +78,20 @@ const Content = () => {
     });
   };
 
+  const handleDelete = (tabId: number) => () => {
+    chrome.runtime.sendMessage({
+      type: 'DELETE',
+      payload: tabId,
+    });
+  };
+
   const showOrHide = debounce(async () => {
     if (checkIfShouldShow(keysPressed.current)) {
       const s = await getMenu();
       setState(s);
+      setVisible(true);
     } else {
-      setState(undefined);
+      setVisible(false);
     }
   }, 250);
 
@@ -107,6 +121,10 @@ const Content = () => {
     update();
   }, [update]);
 
+  // useEffect(() => {
+  //   const s = getMenu().then((s) => setState(s));
+  // }, []);
+
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       console.log('event.key :>> ', event.key);
@@ -128,7 +146,7 @@ const Content = () => {
 
     const onWindowBlur = (event: FocusEvent) => {
       keysPressed.current.clear();
-      setState(undefined);
+      setVisible(visible);
     };
 
     window.addEventListener('blur', onWindowBlur, false);
@@ -171,15 +189,22 @@ const Content = () => {
   if (!state) return null;
 
   return (
-    <div className={styles.container}>
-      <ul>
+    <div
+      style={{ visibility: visible ? 'visible' : 'hidden' }}
+      className={styles.container}
+    >
+      <ul className={styles.menu}>
         {Object.entries(state.menu).map(([menuTitle, menuConfig]) => (
-          <li key={menuTitle}>
-            <button>{menuTitle}</button>
-            <ul>
+          <li className={styles.menuItemContainer} key={menuTitle}>
+            <button className={styles.menuBtn}>{menuTitle}</button>
+            <ul className={styles.leafs}>
               {menuConfig.map(({ tabId, title }) => (
-                <li key={tabId}>
-                  <button onClick={handleClick(tabId)}>{title}</button>
+                <li className={styles.leaftContainer} key={tabId}>
+                  <MenuLeaf
+                    title={title}
+                    onClick={handleClick(tabId)}
+                    onRemove={handleDelete(tabId)}
+                  />
                 </li>
               ))}
             </ul>
