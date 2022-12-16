@@ -36,18 +36,21 @@ type DeletePayload = {
 
 type TabIDByURL = { [x: string]: string };
 
-// chrome.windows.onCreated.addListener((event) => {
-//   chrome.windows.getAll((windows) => {
-//     chrome.tabs.query({ windowId: event.id }).then((tabs) => {
-//       chrome.storage.local.get('state', (result) => {
-//         const state: State = result.state;
-//         if (tabs.length === state.tabs.length) {
+chrome.windows.onCreated.addListener((event) => {
+  chrome.windows.getAll((windows) => {
+    chrome.tabs.query({ windowId: event.id }).then((tabs) => {
+      tabs.forEach((tab) => {
+        if (tab.id) chrome.tabs.reload(tab.id);
+      });
+      // chrome.storage.local.get('state', (result) => {
+      //   const state: State = result.state;
+      //   if (tabs.length === state.tabs.length) {
 
-//         }
-//       })
-//     });
-//   });
-// });
+      //   }
+      // })
+    });
+  });
+});
 
 chrome.storage.local.set({ state: { menu: {} } });
 
