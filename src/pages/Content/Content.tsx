@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { debounce, poll } from '../../shared';
+import { debounce, poll, sleep } from '../../shared';
 import { configs } from '../../shared/config';
 
 import './content.styles.css';
@@ -51,6 +51,7 @@ const modifierKeys = new Set(['Alt', 'Meta', 'Control', 'Shift']);
 const checkIfModifierKeyPressed = (event: KeyboardEvent) =>
   modifierKeys.has(event.key);
 
+const useDoublePressHold = true;
 const shortcutKey = ['Alt'];
 
 const checkIfShouldShow = (keysPressed: Set<string>) => {
@@ -65,6 +66,7 @@ const Content = () => {
   const [visible, setVisible] = useState<boolean>();
   const errorsRef = useRef<Error[]>([]);
   const keysPressed = useRef(new Set<string>());
+  const pressCountRef = useRef(0);
 
   const getMenu = async (): Promise<State> => {
     const result = await chrome.storage.local.get('state');
@@ -85,7 +87,9 @@ const Content = () => {
     });
   };
 
-  const showOrHide = debounce(async () => {
+  const showOrHide = async (isSecondPress: boolean) => {
+    // const check = !useDoublePressHold || isSecondPress;
+
     if (checkIfShouldShow(keysPressed.current)) {
       const s = await getMenu();
       setState(s);
@@ -93,7 +97,7 @@ const Content = () => {
     } else {
       setVisible(false);
     }
-  }, 250);
+  };
 
   const update = useCallback(() => {
     configs.forEach(async (config) => {
@@ -128,19 +132,38 @@ const Content = () => {
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       console.log('event.key :>> ', event.key);
+      // const isSecondPress = keysPressed.current.has(event.key);
+      // if (isSecondPress) {
+      //   showOrHide(true);
+      //   return;
+      // }
+
       if (checkIfModifierKeyPressed(event)) {
         keysPressed.current.add(event.key);
+        pressCountRef.current += 1;
       }
-      showOrHide();
+      console.log('pressCountRef.current :>> ', pressCountRef.current);
+      if (!useDoublePressHold || pressCountRef.current === 2) {
+        showOrHide(false);
+      }
     };
 
     document.addEventListener('keydown', onKeyDown);
 
-    const onKeyUp = (event: KeyboardEvent) => {
+    const onKeyUp = async (event: KeyboardEvent) => {
       if (checkIfModifierKeyPressed(event)) {
-        keysPressed.current.delete(event.key);
+        const timeout =
+          pressCountRef.current === 1 && useDoublePressHold ? 500 : 0;
+
+        await sleep(timeout);
+
+        pressCountRef.current -= 1;
       }
-      showOrHide();
+      console.log('pressCountRef.current :>> ', pressCountRef.current);
+      if (pressCountRef.current === 0) {
+        keysPressed.current.delete(event.key);
+        showOrHide(false);
+      }
     };
     document.addEventListener('keyup', onKeyUp);
 

@@ -37,7 +37,8 @@ export type Config = {
   filter: (arg: Window) => string;
 };
 
-const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+export const sleep = (ms: number) =>
+  new Promise((resolve) => setTimeout(resolve, ms));
 
 export const poll = <T>(
   funcToRun: () => T,
