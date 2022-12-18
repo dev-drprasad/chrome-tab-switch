@@ -40,6 +40,7 @@ const updateMenu = async (menu: string, title: string, url: string) => {
   return new Promise((resolve, rej) => {
     const timerId = setTimeout(rej, 2000, new Error('Timeout'));
     chrome.runtime.sendMessage(payload, (result) => {
+      console.log('chrome.runtime.lastError :>> ', chrome.runtime.lastError);
       clearTimeout(timerId);
       resolve(result);
     });
@@ -157,7 +158,10 @@ const Content = () => {
 
         await sleep(timeout);
 
-        pressCountRef.current -= 1;
+        // -1 can happen if we had hold in one tab, released in other tab
+        if (pressCountRef.current !== 0) {
+          pressCountRef.current -= 1;
+        }
       }
       console.log('pressCountRef.current :>> ', pressCountRef.current);
       if (pressCountRef.current === 0) {
@@ -169,10 +173,12 @@ const Content = () => {
 
     const onWindowBlur = (event: FocusEvent) => {
       keysPressed.current.clear();
+      pressCountRef.current = 0;
       setVisible(visible);
     };
 
     window.addEventListener('blur', onWindowBlur, false);
+    window.addEventListener('focusout', onWindowBlur, false);
 
     return () => {
       document.removeEventListener('keydown', onKeyDown, false);

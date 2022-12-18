@@ -1,6 +1,7 @@
 // const registry = {};
 
 import { configs, deduplicates } from '../../shared/config';
+import Storage from './Storage';
 
 type Config = {
   tabId: number;
@@ -39,9 +40,10 @@ type TabIDByURL = { [x: string]: string };
 chrome.windows.onCreated.addListener((event) => {
   chrome.windows.getAll((windows) => {
     chrome.tabs.query({ windowId: event.id }).then((tabs) => {
-      tabs.forEach((tab) => {
-        if (tab.id) chrome.tabs.reload(tab.id);
+      const reloadPromises = tabs.map((tab) => {
+        return tab.id ? chrome.tabs.reload(tab.id) : Promise.resolve();
       });
+      Promise.all(reloadPromises).then(() => {});
       // chrome.storage.local.get('state', (result) => {
       //   const state: State = result.state;
       //   if (tabs.length === state.tabs.length) {
@@ -62,6 +64,7 @@ const updateURLByTabId = (tabId: number, url: string) => {
         const config = configs.find((config) => config.tabId === tabId);
         if (config?.url) {
           config.url = url;
+          config.title = ''; // if URL changes, then title might change, resetting here. we get new title by sending event to content script
           console.log('updating url ', config);
           state.menu[menu] = configs;
           chrome.storage.local.set({ state }, () => resolve(undefined));
@@ -130,7 +133,7 @@ chrome.runtime.onMessage.addListener(function (request, sender, sendResponse) {
         });
       }
       state.menu[belongTo] = configs;
-      chrome.storage.local.set({ state });
+      Storage.save('state', state);
     });
   }
 
@@ -153,7 +156,7 @@ const closeMatchedTab = (
       if (currentTabId === tabId) return false;
       return (regex.exec(url) || [])[1] === match;
     });
-    console.log('existingTab :>> ', existingTab);
+
     if (!existingTab?.id) return;
     chrome.tabs.remove(existingTab.id);
     removeTabId(existingTab.id);
@@ -172,6 +175,7 @@ const closeDuplicateTab = (tabId: number, url: string) => {
 };
 
 chrome.tabs.onCreated.addListener((tab) => {
+  console.log('tab created');
   const url = tab.url || tab.pendingUrl;
   const tabId = tab.id;
   if (!url || !tabId) return;
@@ -180,28 +184,36 @@ chrome.tabs.onCreated.addListener((tab) => {
 });
 
 chrome.tabs.onUpdated.addListener(async (tabId, change) => {
+  console.log('tab updated', change);
   const url = change.url;
+
+  // if URL present, it means navigation. else there is navigation
   if (url) {
     await updateURLByTabId(tabId, url);
+
+    // if page reloads completely, the we are lucky. content script runs and REGISTER the tab
+    // if page just updates history, then we need to send event to REGISTER again
+    chrome.tabs.sendMessage(tabId, { type: 'UPDATE' });
+
     closeDuplicateTab(tabId, url);
   }
 });
 
 chrome.tabs.onRemoved.addListener((tabId) => {
-  console.log('tabId :>> ', tabId);
+  console.log('tab removed');
   removeTabId(tabId);
 });
 
-chrome.webNavigation.onHistoryStateUpdated.addListener((event) => {
-  console.log('event :>> ', event);
-  for (let i = 0; i < configs.length; i++) {
-    const config = configs[i];
-    const url = event.url;
-    if (config.urlRegex.exec(url)) {
-      chrome.tabs.sendMessage(event.tabId, { type: 'UPDATE' });
-      return;
-    }
-  }
+// chrome.webNavigation.onHistoryStateUpdated.addListener((event) => {
+// console.log('event :>> ', event.transitionType);
+//   for (let i = 0; i < configs.length; i++) {
+//     const config = configs[i];
+//     const url = event.url;
+//     if (config.urlRegex.exec(url)) {
+//       chrome.tabs.sendMessage(event.tabId, { type: 'UPDATE' });
+//       return;
+//     }
+//   }
 
-  removeTabId(event.tabId);
-});
+// removeTabId(event.tabId);
+// });
