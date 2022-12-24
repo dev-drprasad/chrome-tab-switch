@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <title></title>
+</head>
+<button id="restart-button">Restart extension</button>
+
+<script>
+  const restartButton = document.getElementById('restart-button');
+  restartButton.addEventListener('click', () => {
+    chrome.runtime.reload();
+  });
+</script>
+
+<body>
+  <div id="app-container"></div>
+</body>
+
+</html>
