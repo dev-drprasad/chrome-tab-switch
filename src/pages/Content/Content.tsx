@@ -1,10 +1,11 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { debounce, poll, sleep } from '../../shared';
+import { poll, sleep } from '../../shared';
 import { configs } from '../../shared/config';
 
 import './content.styles.css';
 import styles from './content.module.scss';
 import MenuLeaf from './MenuLeaf';
+import Event from './modules/Event';
 
 type Config = {
   tabId: number;
@@ -28,25 +29,6 @@ window.history.pushState = function (...args) {
   pustateListeners.forEach((fn) => fn(...args));
 };
 
-const updateMenu = async (menu: string, title: string, url: string) => {
-  const payload = {
-    type: 'REGISTER',
-    payload: {
-      url,
-      belongTo: menu,
-      title,
-    },
-  };
-  return new Promise((resolve, rej) => {
-    const timerId = setTimeout(rej, 2000, new Error('Timeout'));
-    chrome.runtime.sendMessage(payload, (result) => {
-      console.log('chrome.runtime.lastError :>> ', chrome.runtime.lastError);
-      clearTimeout(timerId);
-      resolve(result);
-    });
-  });
-};
-
 const modifierKeys = new Set(['Alt', 'Meta', 'Control', 'Shift']);
 
 const checkIfModifierKeyPressed = (event: KeyboardEvent) =>
@@ -62,6 +44,11 @@ const checkIfShouldShow = (keysPressed: Set<string>) => {
   );
 };
 
+const getMenu = async (): Promise<State> => {
+  const result = await chrome.storage.local.get('state');
+  return result.state;
+};
+
 const Content = () => {
   const [state, setState] = useState<State>();
   const [visible, setVisible] = useState<boolean>();
@@ -69,26 +56,15 @@ const Content = () => {
   const keysPressed = useRef(new Set<string>());
   const pressCountRef = useRef(0);
 
-  const getMenu = async (): Promise<State> => {
-    const result = await chrome.storage.local.get('state');
-    return result.state;
-  };
-
   const handleClick = (tabId: number) => () => {
-    chrome.runtime.sendMessage({
-      type: 'CHANGE_ACTIVE_TAB',
-      payload: tabId,
-    });
+    Event.switchToTab(tabId).catch(console.error);
   };
 
   const handleDelete = (tabId: number) => () => {
-    chrome.runtime.sendMessage({
-      type: 'DELETE',
-      payload: tabId,
-    });
+    Event.removeTab(tabId).catch(console.error);
   };
 
-  const showOrHide = async (isSecondPress: boolean) => {
+  const showOrHide = useCallback(async (isSecondPress: boolean) => {
     // const check = !useDoublePressHold || isSecondPress;
 
     if (checkIfShouldShow(keysPressed.current)) {
@@ -98,26 +74,33 @@ const Content = () => {
     } else {
       setVisible(false);
     }
-  };
+  }, []);
 
   const update = useCallback(() => {
+    console.log('updating menu... :>>');
     configs.forEach(async (config) => {
       const url = window.location.href;
+      console.log('checking any config matching with url :>>', url);
       if (config.urlRegex.exec(url)) {
         const menu = config.filter(window);
-        console.log('menu :>> ', menu);
         if (menu) {
           try {
+            console.log('polling for title :>>');
             const title = await poll<Promise<string>>(
               async () => config.title(window),
               (title) => !!title,
               3000
             ).promise;
-            await updateMenu(menu, title || '', url);
+            console.log('registering tab :>>');
+            await Event.registerTab({ menu, title: title || '', url });
+            console.log('tab registered :>>');
           } catch (error) {
+            console.log('error :>>', error);
             errorsRef.current.push(error as Error);
           }
         }
+      } else {
+        console.log('url is not match with config :>>', url, config);
       }
     });
   }, []);
@@ -174,7 +157,7 @@ const Content = () => {
     const onWindowBlur = (event: FocusEvent) => {
       keysPressed.current.clear();
       pressCountRef.current = 0;
-      setVisible(visible);
+      setVisible(false);
     };
 
     window.addEventListener('blur', onWindowBlur, false);
@@ -206,6 +189,7 @@ const Content = () => {
   useEffect(() => {
     const handler = (event: { type: string }) => {
       if (event.type === 'UPDATE') {
+        console.log('update event received :>>');
         update();
       }
     };

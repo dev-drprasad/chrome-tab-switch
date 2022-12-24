@@ -57,24 +57,32 @@ chrome.windows.onCreated.addListener((event) => {
 chrome.storage.local.set({ state: { menu: {} } });
 
 const updateURLByTabId = (tabId: number, url: string) => {
-  return new Promise((resolve) => {
-    chrome.storage.local.get('state', (result) => {
-      const state: State = result.state || { menu: {} };
-      Object.entries(state.menu).forEach(([menu, configs]) => {
-        const config = configs.find((config) => config.tabId === tabId);
-        if (config?.url) {
-          config.url = url;
-          config.title = ''; // if URL changes, then title might change, resetting here. we get new title by sending event to content script
-          console.log('updating url ', config);
-          state.menu[menu] = configs;
-          chrome.storage.local.set({ state }, () => resolve(undefined));
-        }
-      });
-    });
+  return new Promise((resolve, reject) => {
+    chrome.storage.local
+      .get('state')
+      .then((result) => {
+        const state: State = result.state || { menu: {} };
+
+        let isURLUpdated = false;
+        Object.entries(state.menu).forEach(([menu, configs]) => {
+          const config = configs.find((config) => config.tabId === tabId);
+          if (config?.url) {
+            config.url = url;
+            config.title = ''; // if URL changes, then title might change, resetting here. we get new title by sending event to content script
+            console.log('updating url ', config);
+            state.menu[menu] = configs;
+            chrome.storage.local.set({ state });
+            isURLUpdated = true;
+          }
+        });
+        resolve(isURLUpdated);
+      })
+      .catch(reject);
   });
 };
 
 const removeTabId = (tabId: number) => {
+  console.log(`removing tab with id ${tabId}`);
   chrome.storage.local.get('state', (result) => {
     const state: State = result.state;
     Object.entries(state.menu).forEach(([menu, configs]) => {
@@ -100,7 +108,8 @@ chrome.tabs.query({ lastFocusedWindow: true }, (tabs) => {
 chrome.runtime.onMessage.addListener(function (request, sender, sendResponse) {
   console.log('data :>> ', request);
   if (request.type === 'CHANGE_ACTIVE_TAB') {
-    chrome.tabs.update(request.payload, { active: true });
+    chrome.tabs.update(request.payload, { active: true }).then(sendResponse);
+    return;
   }
 
   if (request.type === 'REGISTER') {
@@ -118,6 +127,7 @@ chrome.runtime.onMessage.addListener(function (request, sender, sendResponse) {
       const tabId = sender.tab?.id || eventTabId;
       if (!tabId) {
         console.error('no tab present. request is :>>', request);
+        sendResponse(new Error(`no tab present with ${tabId}`));
         return;
       }
       const configs = state.menu[belongTo] || [];
@@ -133,14 +143,19 @@ chrome.runtime.onMessage.addListener(function (request, sender, sendResponse) {
         });
       }
       state.menu[belongTo] = configs;
-      Storage.save('state', state);
+      Storage.save('state', state).then(sendResponse);
+      return;
     });
   }
 
   if (request.type === 'DELETE') {
     const eventTabId = request.payload as number;
     removeTabId(eventTabId);
+    sendResponse();
+    return;
   }
+
+  sendResponse(new Error(`not valid event ${JSON.stringify(request)}`));
 });
 
 const closeMatchedTab = (
@@ -189,11 +204,23 @@ chrome.tabs.onUpdated.addListener(async (tabId, change) => {
 
   // if URL present, it means navigation. else there is navigation
   if (url) {
-    await updateURLByTabId(tabId, url);
+    try {
+      const isURLUpdated = await updateURLByTabId(tabId, url);
+      console.log('isURLUpdated :>> ', isURLUpdated);
+    } catch (error) {
+      console.log('error :>> ', error);
+    }
 
     // if page reloads completely, the we are lucky. content script runs and REGISTER the tab
     // if page just updates history, then we need to send event to REGISTER again
-    chrome.tabs.sendMessage(tabId, { type: 'UPDATE' });
+    chrome.tabs.sendMessage(tabId, { type: 'UPDATE' }, () => {
+      if (chrome.runtime.lastError) {
+        console.log(
+          'failed to send UPDATE to content script :>> ',
+          chrome.runtime.lastError
+        );
+      }
+    });
 
     closeDuplicateTab(tabId, url);
   }
