@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <title></title>
+</head>
+<button id="reload-all-tabs-button">Reload All Tabs</button>
+<button id="restart-extension-button">Restart Extension</button>
+
+<script>
+  const reloadAllTabsButton = document.getElementById('reload-all-tabs-button');
+  reloadAllTabsButton.addEventListener('click', () => {
+    // Code to reload all tabs goes here
+  });
+
+  const restartExtensionButton = document.getElementById('restart-extension-button');
+  restartExtensionButton.addEventListener('click', () => {
+    chrome.runtime.reload();
+  });
+</script>
+
+
+<body>
+  <div id="app-container"></div>
+</body>
+
+</html>
