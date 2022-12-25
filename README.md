@@ -158,3 +158,5 @@ Michael Xieyang Liu | [Website](https://lxieyang.github.io)
 - https://davidwalsh.name/javascript-regex-string
 - https://stackoverflow.com/questions/4570093/how-to-get-notified-about-changes-of-the-history-via-history-pushstate
 - https://stackoverflow.com/questions/60659473/inject-css-styles-to-shadow-root-via-webpack
+- https://codepen.io/wheatup/pen/GbgyLY
+- https://www.codewithfaraz.com/content/58/fun-project-building-the-gta-5-weapon-wheel-using-html-css-and-javascript

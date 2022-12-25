@@ -1,17 +1,7 @@
 // const registry = {};
 
-import { configs, deduplicates } from '../../shared/config';
-import Storage from './Storage';
-
-type Config = {
-  tabId: number;
-  url: string;
-  title: string;
-};
-
-type State = {
-  menu: { [x: string]: Config[] };
-};
+import { deduplicates } from '../../shared/config';
+import State, { TState } from './State';
 
 // const state: State = { menu: {} };
 
@@ -37,61 +27,77 @@ type DeletePayload = {
 
 type TabIDByURL = { [x: string]: string };
 
-chrome.windows.onCreated.addListener((event) => {
-  chrome.windows.getAll((windows) => {
-    chrome.tabs.query({ windowId: event.id }).then((tabs) => {
-      const reloadPromises = tabs.map((tab) => {
-        return tab.id ? chrome.tabs.reload(tab.id) : Promise.resolve();
-      });
-      Promise.all(reloadPromises).then(() => {});
-      // chrome.storage.local.get('state', (result) => {
-      //   const state: State = result.state;
-      //   if (tabs.length === state.tabs.length) {
-
-      //   }
-      // })
-    });
-  });
-});
-
-chrome.storage.local.set({ state: { menu: {} } });
-
-const updateURLByTabId = (tabId: number, url: string) => {
+const reloadAllTabs = (windowId: number | undefined) => {
   return new Promise((resolve, reject) => {
-    chrome.storage.local
-      .get('state')
-      .then((result) => {
-        const state: State = result.state || { menu: {} };
-
-        let isURLUpdated = false;
-        Object.entries(state.menu).forEach(([menu, configs]) => {
-          const config = configs.find((config) => config.tabId === tabId);
-          if (config?.url) {
-            config.url = url;
-            config.title = ''; // if URL changes, then title might change, resetting here. we get new title by sending event to content script
-            console.log('updating url ', config);
-            state.menu[menu] = configs;
-            chrome.storage.local.set({ state });
-            isURLUpdated = true;
-          }
+    chrome.windows.getAll((windows) => {
+      chrome.tabs.query({ windowId: windowId }).then((tabs) => {
+        const reloadPromises = tabs.map((tab) => {
+          return tab.id ? chrome.tabs.reload(tab.id) : Promise.resolve();
         });
-        resolve(isURLUpdated);
-      })
-      .catch(reject);
+        Promise.all(reloadPromises).then(resolve).catch(reject);
+        // chrome.storage.local.get('state', (result) => {
+        //   const state: State = result.state;
+        //   if (tabs.length === state.tabs.length) {
+
+        //   }
+        // })
+      });
+    });
   });
 };
 
-const removeTabId = (tabId: number) => {
-  console.log(`removing tab with id ${tabId}`);
-  chrome.storage.local.get('state', (result) => {
-    const state: State = result.state;
-    Object.entries(state.menu).forEach(([menu, configs]) => {
-      const validConfigs = configs.filter((config) => config.tabId !== tabId);
+const handleWindowCreated = (window: chrome.windows.Window) => {
+  reloadAllTabs(window.id);
+};
 
-      state.menu[menu] = validConfigs;
-      chrome.storage.local.set({ state });
-    });
+(async () => {
+  console.log('script initialized :>>');
+  await State.reset();
+  console.log('reloading tabs :>>');
+  await reloadAllTabs(undefined);
+  chrome.windows.onCreated.addListener(handleWindowCreated);
+})();
+
+const updateURLByTabId = async (tabId: number, url: string) => {
+  let state: TState = { menu: {} };
+  state = await State.get();
+
+  let isURLUpdated = false;
+  Object.entries(state.menu).forEach(([menu, configs]) => {
+    const config = configs.find((config) => config.tabId === tabId);
+    if (config?.url) {
+      config.url = url;
+      config.title = ''; // if URL changes, then title might change, resetting here. we get new title by sending event to content script
+      console.log('updating url ', config);
+      state.menu[menu] = configs;
+      isURLUpdated = true;
+    }
   });
+
+  await State.set(state);
+  return isURLUpdated;
+};
+
+const removeTabId = async (tabId: number) => {
+  console.log(`removing tab with id ${tabId}`);
+  let state: TState;
+  try {
+    state = await State.get();
+  } catch (error) {
+    console.log('error :>> ', error);
+    return;
+  }
+
+  Object.entries(state.menu).forEach(([menu, configs]) => {
+    const validConfigs = configs.filter((config) => config.tabId !== tabId);
+    state.menu[menu] = validConfigs;
+  });
+
+  try {
+    State.set(state);
+  } catch (error) {
+    console.log('error :>> ', error);
+  }
 };
 
 chrome.tabs.query({ lastFocusedWindow: true }, (tabs) => {
@@ -121,7 +127,7 @@ chrome.runtime.onMessage.addListener(function (request, sender, sendResponse) {
     } = request.payload as RegisterPayload;
 
     chrome.storage.local.get('state', (result) => {
-      const state: State = result.state || { menu: {} };
+      const state: TState = result.state || { menu: {} };
       console.log('state :>> ', state);
       console.log('sender.tab?.id :>> ', sender.tab?.id);
       const tabId = sender.tab?.id || eventTabId;
@@ -143,7 +149,7 @@ chrome.runtime.onMessage.addListener(function (request, sender, sendResponse) {
         });
       }
       state.menu[belongTo] = configs;
-      Storage.save('state', state).then(sendResponse);
+      State.set(state).then(sendResponse);
       return;
     });
   }
@@ -227,7 +233,6 @@ chrome.tabs.onUpdated.addListener(async (tabId, change) => {
 });
 
 chrome.tabs.onRemoved.addListener((tabId) => {
-  console.log('tab removed');
   removeTabId(tabId);
 });
 
