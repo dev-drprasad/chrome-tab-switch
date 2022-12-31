@@ -46,17 +46,18 @@ const reloadAllTabs = (windowId: number | undefined) => {
   });
 };
 
-const handleWindowCreated = (window: chrome.windows.Window) => {
-  reloadAllTabs(window.id);
+const handleWindowCreated = async (window: chrome.windows.Window) => {
+  await State.reset();
+  await reloadAllTabs(window.id);
 };
 
-(async () => {
-  console.log('script initialized :>>');
-  await State.reset();
-  console.log('reloading tabs :>>');
-  await reloadAllTabs(undefined);
-  chrome.windows.onCreated.addListener(handleWindowCreated);
-})();
+// (async () => {
+//   console.log('script initialized :>>');
+//   await State.reset();
+//   console.log('reloading tabs :>>');
+//   await reloadAllTabs(undefined);
+// })();
+chrome.windows.onCreated.addListener(handleWindowCreated);
 
 const updateURLByTabId = async (tabId: number, url: string) => {
   let state: TState = { menu: {} };
@@ -115,7 +116,7 @@ chrome.runtime.onMessage.addListener(function (request, sender, sendResponse) {
   console.log('data :>> ', request);
   if (request.type === 'CHANGE_ACTIVE_TAB') {
     chrome.tabs.update(request.payload, { active: true }).then(sendResponse);
-    return;
+    return true;
   }
 
   if (request.type === 'REGISTER') {
@@ -134,7 +135,7 @@ chrome.runtime.onMessage.addListener(function (request, sender, sendResponse) {
       if (!tabId) {
         console.error('no tab present. request is :>>', request);
         sendResponse(new Error(`no tab present with ${tabId}`));
-        return;
+        return true;
       }
       const configs = state.menu[belongTo] || [];
       const existingTab = configs.find((config) => config.tabId === tabId);
@@ -150,7 +151,7 @@ chrome.runtime.onMessage.addListener(function (request, sender, sendResponse) {
       }
       state.menu[belongTo] = configs;
       State.set(state).then(sendResponse);
-      return;
+      return true;
     });
   }
 
@@ -158,10 +159,11 @@ chrome.runtime.onMessage.addListener(function (request, sender, sendResponse) {
     const eventTabId = request.payload as number;
     removeTabId(eventTabId);
     sendResponse();
-    return;
+    return true;
   }
 
   sendResponse(new Error(`not valid event ${JSON.stringify(request)}`));
+  return true;
 });
 
 const closeMatchedTab = (

@@ -152,6 +152,7 @@ Michael Xieyang Liu | [Website](https://lxieyang.github.io)
 
 ## Reference:
 
+- https://itnext.io/all-youll-ever-need-to-know-about-chrome-extensions-ceede9c28836
 - https://stackoverflow.com/questions/11005258/persistent-unique-id-for-chrome-tabs-that-lasts-between-browser-sessions
 - https://stackoverflow.com/questions/11005258/
 - https://github.com/dvdvdmt/popup-tab-switcher

@@ -187,10 +187,14 @@ const Content = () => {
   // }, []);
 
   useEffect(() => {
-    const handler = (event: { type: string }) => {
+    const handler = async (
+      event: { type: string },
+      sender: chrome.runtime.MessageSender
+    ) => {
       if (event.type === 'UPDATE') {
         console.log('update event received :>>');
         update();
+        return;
       }
     };
     chrome.runtime.onMessage.addListener(handler);
